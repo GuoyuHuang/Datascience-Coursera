@@ -1,0 +1,176 @@
+
+# 'Machine Learning project: predicting correctness of movement'
+
+
+```{r message=F, echo=F}
+library(ggplot2)
+library(caret)
+```
+
+## Load data
+
+```{r}
+pml.train.val <- read.csv('data/pml-training.csv', na.strings=c("","NA") )  # training and validation
+pml.test <- read.csv('data/pml-testing.csv', na.strings=c("","NA"))         # 20 test observations
+pml.train.val <- pml.train.val[,-1] # first column of file is row numbers
+pml.test <- pml.test[,-1]           # first column of file is row numbers
+```
+
+## Structure of the dataset, cleaning
+
+The result variable is `classe`, a factor variable with levels A, B, C, D, and E.
+
+I will not use the timestamp variables in my model: I take it that we are
+meant to be able to distinguish the motions regardless of when they occured.
+The `num_window` variable will not be used as a predictor, but will be used
+to aggregate the data per window, with the main purpose of making a smaller
+dataset.
+
+```{r}
+pml.train.val <- pml.train.val[,-(2:5)] # remove timestamp columns
+```
+
+The model will include only `user_name` and the following 52 variables (in black text):
+
+<table border=1>
+<tr><td><font color='red'></font></td><td><font color='red'>belt</font></td><td><font color='red'>arm</font></td><td><font color='red'>dumbbell</font></td><td><font color='red'>forearm</font></td></tr>
+<tr><td><font color='red'>roll</font></td><td>roll_belt</td><td>roll_arm</td><td>roll_dumbbell</td><td>roll_forearm</td></tr>
+<tr><td><font color='red'>pitch</font></td><td>pitch_belt</td><td>pitch_arm</td><td>pitch_dumbbell</td><td>pitch_forearm</td></tr>
+<tr><td><font color='red'>yaw</font></td><td>yaw_belt</td><td>yaw_arm</td><td>yaw_dumbbell</td><td>yaw_forearm</td></tr>
+<tr><td><font color='red'>total_accel</font></td><td>total_accel_belt</td><td>total_accel_arm</td><td>total_accel_dumbbell</td><td>total_accel_forearm</td></tr>
+<tr><td><font color='red'>gyros_x</font></td><td>gyros_x_belt</td><td>gyros_x_arm</td><td>gyros_x_dumbbell</td><td>gyros_x_forearm</td></tr>
+<tr><td><font color='red'>gyros_y</font></td><td>gyros_y_belt</td><td>gyros_y_arm</td><td>gyros_y_dumbbell</td><td>gyros_y_forearm</td></tr>
+<tr><td><font color='red'>gyros_z</font></td><td>gyros_z_belt</td><td>gyros_z_arm</td><td>gyros_z_dumbbell</td><td>gyros_z_forearm</td></tr>
+<tr><td><font color='red'>accel_x</font></td><td>accel_x_belt</td><td>accel_x_arm</td><td>accel_x_dumbbell</td><td>accel_x_forearm</td></tr>
+<tr><td><font color='red'>accel_y</font></td><td>accel_y_belt</td><td>accel_y_arm</td><td>accel_y_dumbbell</td><td>accel_y_forearm</td></tr>
+<tr><td><font color='red'>accel_z</font></td><td>accel_z_belt</td><td>accel_z_arm</td><td>accel_z_dumbbell</td><td>accel_z_forearm</td></tr>
+<tr><td><font color='red'>magnet_x</font></td><td>magnet_x_belt</td><td>magnet_x_arm</td><td>magnet_x_dumbbell</td><td>magnet_x_forearm</td></tr>
+<tr><td><font color='red'>magnet_y</font></td><td>magnet_y_belt</td><td>magnet_y_arm</td><td>magnet_y_dumbbell</td><td>magnet_y_forearm</td></tr>
+<tr><td><font color='red'>magnet_z</font></td><td>magnet_z_belt</td><td>magnet_z_arm</td><td>magnet_z_dumbbell</td><td>magnet_z_forearm</td></tr>
+</table>
+
+<br/>
+**Note:** The model won't include [the remaining 100 columns](UnusedVariables.html).
+In "new window" rows (when `new_window` is "yes"), these columns give summary
+statistics on all the rows in the window. These columns are mostly blank, and are
+also blank in the test set. These columns are mislabelled and contain `#DIV/0` errors
+so they shouldn't be used.
+
+The following code removes the extra columns from the training set:
+
+```{r message=F}
+require(plyr)
+count.NA <- unlist(colwise(function(x) {sum(is.na(x))})(pml.train.val)) # count NAs in each column
+# table(count.NA) # There are full columns and mostly-empty columns.
+pml.train.val <- pml.train.val[,count.NA == 0] # removes the summary columns
+```
+
+<<<<<<< HEAD
+<<<<<<< HEAD:Project.Rmd
+The [paper](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) hints that per-window means are the most
+helpful predictors. This code constructs a much smaller dataset with
+the per-window column means.
+=======
+The [paper](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) 
+hints that per-window means are the most
+helpful predictors.  This code constructs a much smaller dataset with
+the per-window column means:
+>>>>>>> gh-pages:index.Rmd
+=======
+I was unable to train a model on `pml.train.val` because it is too big
+for my computer.
+The [paper](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) 
+hints that per-window means are the most
+helpful predictors.  The following code constructs a much smaller dataset with
+the per-window column means. I will use a subset of `mean.pml.train.val` for training,
+and will do validation on an unused subset of `pml.train.val`.
+>>>>>>> gh-pages
+
+```{r}
+mean.pml.train.val <- aggregate(pml.train.val[,-c(1,2,55)],
+                                by=list(pml.train.val$user_name,
+                                        pml.train.val$num_window,
+                                        pml.train.val$classe),
+                                FUN=mean)
+names(mean.pml.train.val)[1:3] <- c('user_name', 'num_window', 'classe')
+dim(mean.pml.train.val) # more manageable size
+```
+
+## Model building
+<<<<<<< HEAD:Project.Rmd
+=======
+
+Following the hint in the paper, I used a random forest. Training a random
+forest on `pml.train.val` took more than 20 minutes on my computer (I stopped
+it).  Instead I created `training` as a subset of `mean.pml.train.val`.
+
+The model predicts well on observations from the original data set.
+The `caret` defaults resulted in about 83% accuracy when predicting on
+observations in `pml.train.val`, from windows not used `training`.
+>>>>>>> gh-pages:index.Rmd
+
+### Creating `training` set
+
+```{r}
+set.seed(8732) # typed by my cat
+inTrain <- createDataPartition(mean.pml.train.val$classe, p=.80, list=F)
+training <- mean.pml.train.val[inTrain,]
+dim(training)
+```
+
+### Creating `validation` set
+
+This is a subset of `pml.train.val`, including only rows
+from windows not used in `training`.
+
+```{r}
+allowed <- !(pml.train.val$num_window %in% training$num_window)
+validation <- pml.train.val[allowed,]
+dim(validation)
+```
+
+### Training a model
+
+(Remembering to eliminate `num_window` from the model.)
+
+```{r}
+rf.model <- train(classe ~ . - num_window, data=training, method='rf')
+```
+
+### Predictions and accuracy on the validation set
+
+```{r}
+pred <- predict(rf.model, validation)
+```
+
+Confusion matrix for predictions on validation set:
+
+```{r}
+table(pred, pml.train.val$classe[allowed])
+```
+
+Validation set accuracy:
+
+```{r}
+sum(pred == validation$classe) / length(pred)
+```
+
+### Predictions on test set
+
+Predictions on the test set:
+
+```{r}
+predict(rf.model, pml.test)
+```
+
+### The right answers on the test set (added post-submission)
+
+These predictions are correct except for the following:
+
+Number 1 is B, not C.
+Number 3 is B, not A.
+Number 11 is B, not A.
+
+This is 85% accuracy on the test set, about what we would
+have expected given the 83.5% accuracy on the validation set.
+I used the confusion matrix to make guesses for my second submissions.

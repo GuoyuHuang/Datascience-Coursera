@@ -1,11 +1,7 @@
----
-title: "(Non)-Impact of Transmission Type on Fuel Consumption for 1973-74 Car Models"
-author: "Guoyu Huang"
-output:
-  pdf_document:
-    fig_caption: true
 
----
+# "(Non)-Impact of Transmission Type on Fuel Consumption for 1973-74 Car Models"
+author: "Guoyu Huang"
+
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 library(plyr)
